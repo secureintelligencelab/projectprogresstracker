@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Progress Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <style>
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .modal { display: none; }
+        .modal.active { display: flex; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- Header -->
+    <header class="bg-blue-600 text-white p-4 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">Student Progress Tracker</h1>
+            <div class="flex items-center gap-4">
+                <span id="userEmail" class="text-sm"></span>
+                <button onclick="signOut()" class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded">Sign Out</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Auth Section -->
+    <div id="authSection" class="container mx-auto mt-8 p-4">
+        <div class="max-w-md mx-auto bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-2xl font-bold mb-4">Sign In</h2>
+            <div class="space-y-4">
+                <input type="email" id="authEmail" placeholder="Email" class="w-full p-2 border rounded">
+                <input type="password" id="authPassword" placeholder="Password" class="w-full p-2 border rounded">
+                <button onclick="signIn()" class="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700">Sign In</button>
+                <button onclick="signUp()" class="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700">Sign Up</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="mainApp" class="container mx-auto mt-4 p-4" style="display: none;">
+        <!-- Tabs -->
+        <div class="bg-white rounded-lg shadow-md mb-4">
+            <div class="flex border-b">
+                <button onclick="switchTab('dashboard')" class="tab-btn px-6 py-3 font-semibold hover:bg-gray-100" data-tab="dashboard">Dashboard</button>
+                <button onclick="switchTab('classes')" class="tab-btn px-6 py-3 font-semibold hover:bg-gray-100" data-tab="classes">Classes</button>
+                <button onclick="switchTab('groups')" class="tab-btn px-6 py-3 font-semibold hover:bg-gray-100" data-tab="groups">Groups</button>
+                <button onclick="switchTab('students')" class="tab-btn px-6 py-3 font-semibold hover:bg-gray-100" data-tab="students">Students</button>
+                <button onclick="switchTab('progress')" class="tab-btn px-6 py-3 font-semibold hover:bg-gray-100" data-tab="progress">Weekly Progress</button>
+            </div>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div id="dashboard" class="tab-content active bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-2xl font-bold mb-4">Dashboard Overview</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div class="bg-blue-100 p-4 rounded-lg">
+                    <h3 class="font-semibold text-blue-800">Total Classes</h3>
+                    <p id="totalClasses" class="text-2xl font-bold text-blue-600">0</p>
+                </div>
+                <div class="bg-green-100 p-4 rounded-lg">
+                    <h3 class="font-semibold text-green-800">Total Groups</h3>
+                    <p id="totalGroups" class="text-2xl font-bold text-green-600">0</p>
+                </div>
+                <div class="bg-purple-100 p-4 rounded-lg">
+                    <h3 class="font-semibold text-purple-800">Total Students</h3>
+                    <p id="totalStudents" class="text-2xl font-bold text-purple-600">0</p>
+                </div>
+            </div>
+            <div id="recentProgress" class="mt-6">
+                <h3 class="text-xl font-semibold mb-3">Recent Progress Updates</h3>
+                <div id="recentProgressList" class="space-y-2"></div>
+            </div>
+        </div>
+
+        <!-- Classes Tab -->
+        <div id="classes" class="tab-content bg-white rounded-lg shadow-md p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">Classes</h2>
+                <button onclick="showAddClassModal()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Add Class</button>
+            </div>
+            <div id="classesList" class="space-y-2"></div>
+        </div>
+
+        <!-- Groups Tab -->
+        <div id="groups" class="tab-content bg-white rounded-lg shadow-md p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">Groups</h2>
+                <button onclick="showAddGroupModal()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Add Group</button>
+            </div>
+            <div id="groupsList" class="space-y-2"></div>
+        </div>
+
+        <!-- Students Tab -->
+        <div id="students" class="tab-content bg-white rounded-lg shadow-md p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">Students</h2>
+                <button onclick="showAddStudentModal()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Add Student</button>
+            </div>
+            <div id="studentsList" class="space-y-2"></div>
+        </div>
+
+        <!-- Progress Tab -->
+        <div id="progress" class="tab-content bg-white rounded-lg shadow-md p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">Weekly Progress</h2>
+                <button onclick="showAddProgressModal()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Add Progress</button>
+            </div>
+            <div class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <select id="filterGroup" onchange="loadProgress()" class="p-2 border rounded">
+                    <option value="">All Groups</option>
+                </select>
+                <select id="filterWeek" onchange="loadProgress()" class="p-2 border rounded">
+                    <option value="">All Weeks</option>
+                </select>
+                <select id="filterStudent" onchange="loadProgress()" class="p-2 border rounded">
+                    <option value="">All Students</option>
+                </select>
+            </div>
+            <div id="progressList" class="space-y-4"></div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <!-- Add Class Modal -->
+    <div id="addClassModal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center">
+        <div class="bg-white rounded-lg p-6 w-96">
+            <h3 class="text-xl font-bold mb-4">Add New Class</h3>
+            <input type="text" id="className" placeholder="Class Name" class="w-full p-2 mb-4 border rounded">
+            <div class="flex justify-end gap-2">
+                <button onclick="closeModal('addClassModal')" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancel</button>
+                <button onclick="addClass()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Group Modal -->
+    <div id="addGroupModal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center">
+        <div class="bg-white rounded-lg p-6 w-96">
+            <h3 class="text-xl font-bold mb-4">Add New Group</h3>
+            <input type="text" id="groupName" placeholder="Group Name" class="w-full p-2 mb-4 border rounded">
+            <select id="groupClass" class="w-full p-2 mb-4 border rounded">
+                <option value="">Select Class</option>
+            </select>
+            <div class="flex justify-end gap-2">
+                <button onclick="closeModal('addGroupModal')" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancel</button>
+                <button onclick="addGroup()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Student Modal -->
+    <div id="addStudentModal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center">
+        <div class="bg-white rounded-lg p-6 w-96">
+            <h3 class="text-xl font-bold mb-4">Add New Student</h3>
+            <input type="text" id="studentName" placeholder="Student Name" class="w-full p-2 mb-4 border rounded">
+            <input type="email" id="studentEmail" placeholder="Student Email" class="w-full p-2 mb-4 border rounded">
+            <select id="studentGroup" class="w-full p-2 mb-4 border rounded">
+                <option value="">Select Group</option>
+            </select>
+            <div class="flex justify-end gap-2">
+                <button onclick="closeModal('addStudentModal')" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancel</button>
+                <button onclick="addStudent()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Progress Modal -->
+    <div id="addProgressModal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center overflow-y-auto">
+        <div class="bg-white rounded-lg p-6 w-96 my-8">
+            <h3 class="text-xl font-bold mb-4">Add Weekly Progress</h3>
+            <select id="progressStudent" class="w-full p-2 mb-4 border rounded">
+                <option value="">Select Student</option>
+            </select>
+            <select id="progressWeek" class="w-full p-2 mb-4 border rounded">
+                <option value="">Select Week</option>
+            </select>
+            <textarea id="progressCompleted" placeholder="What was completed this week?" class="w-full p-2 mb-4 border rounded h-24"></textarea>
+            <textarea id="progressPlanned" placeholder="What is planned for next week?" class="w-full p-2 mb-4 border rounded h-24"></textarea>
+            <div class="mb-4">
+                <label class="flex items-center">
+                    <input type="checkbox" id="progressImplementation" class="mr-2">
+                    <span>Contributing to Implementation</span>
+                </label>
+            </div>
+            <div class="mb-4">
+                <label class="flex items-center">
+                    <input type="checkbox" id="progressTesting" class="mr-2">
+                    <span>Contributing to Testing</span>
+                </label>
+            </div>
+            <textarea id="progressNotes" placeholder="Additional notes" class="w-full p-2 mb-4 border rounded h-20"></textarea>
+            <div class="flex justify-end gap-2">
+                <button onclick="closeModal('addProgressModal')" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancel</button>
+                <button onclick="addProgress()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Firebase configuration - REPLACE WITH YOUR CONFIG
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // Auth state observer
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                document.getElementById('authSection').style.display = 'none';
+                document.getElementById('mainApp').style.display = 'block';
+                document.getElementById('userEmail').textContent = user.email;
+                loadDashboard();
+                loadClasses();
+                loadGroups();
+                loadStudents();
+                loadProgress();
+            } else {
+                document.getElementById('authSection').style.display = 'block';
+                document.getElementById('mainApp').style.display = 'none';
+            }
+        });
+
+        // Authentication functions
+        function signIn() {
+            const email = document.getElementById('authEmail').value;
+            const password = document.getElementById('authPassword').value;
+            auth.signInWithEmailAndPassword(email, password)
+                .catch(error => alert(error.message));
+        }
+
+        function signUp() {
+            const email = document.getElementById('authEmail').value;
+            const password = document.getElementById('authPassword').value;
+            auth.createUserWithEmailAndPassword(email, password)
+                .catch(error => alert(error.message));
+        }
+
+        function signOut() {
+            auth.signOut();
+        }
+
+        // Tab switching
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-600', 'text-white');
+            });
+            document.getElementById(tabName).classList.add('active');
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('bg-blue-600', 'text-white');
+        }
+
+        // Modal functions
+        function showAddClassModal() {
+            document.getElementById('addClassModal').classList.add('active');
+        }
+
+        function showAddGroupModal() {
+            loadClassesForSelect();
+            document.getElementById('addGroupModal').classList.add('active');
+        }
+
+        function showAddStudentModal() {
+            loadGroupsForSelect();
+            document.getElementById('addStudentModal').classList.add('active');
+        }
+
+        function showAddProgressModal() {
+            loadStudentsForSelect();
+            populateWeekSelect();
+            document.getElementById('addProgressModal').classList.add('active');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        // CRUD Operations
+        async function addClass() {
+            const className = document.getElementById('className').value;
+            if (!className) return alert('Please enter a class name');
+
+            try {
+                await db.collection('classes').add({
+                    name: className,
+                    createdBy: auth.currentUser.uid,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                closeModal('addClassModal');
+                loadClasses();
+                loadDashboard();
+            } catch (error) {
+                alert('Error adding class: ' + error.message);
+            }
+        }
+
+        async function addGroup() {
+            const groupName = document.getElementById('groupName').value;
+            const classId = document.getElementById('groupClass').value;
+            if (!groupName || !classId) return alert('Please fill all fields');
+
+            try {
+                await db.collection('groups').add({
+                    name: groupName,
+                    classId: classId,
+                    createdBy: auth.currentUser.uid,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                closeModal('addGroupModal');
+                loadGroups();
+                loadDashboard();
+            } catch (error) {
+                alert('Error adding group: ' + error.message);
+            }
+        }
+
+        async function addStudent() {
+            const studentName = document.getElementById('studentName').value;
+            const studentEmail = document.getElementById('studentEmail').value;
+            const groupId = document.getElementById('studentGroup').value;
+            if (!studentName || !studentEmail || !groupId) return alert('Please fill all fields');
+
+            try {
+                await db.collection('students').add({
+                    name: studentName,
+                    email: studentEmail,
+                    groupId: groupId,
+                    createdBy: auth.currentUser.uid,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                closeModal('addStudentModal');
+                loadStudents();
+                loadDashboard();
+            } catch (error) {
+                alert('Error adding student: ' + error.message);
+            }
+        }
+
+        async function addProgress() {
+            const studentId = document.getElementById('progressStudent').value;
+            const week = document.getElementById('progressWeek').value;
+            const completed = document.getElementById('progressCompleted').value;
+            const planned = document.getElementById('progressPlanned').value;
+            const implementation = document.getElementById('progressImplementation').checked;
+            const testing = document.getElementById('progressTesting').checked;
+            const notes = document.getElementById('progressNotes').value;
+
+            if (!studentId || !week || !completed || !planned) {
+                return alert('Please fill all required fields');
+            }
+
+            try {
+                await db.collection('progress').add({
+                    studentId: studentId,
+                    week: parseInt(week),
+                    completed: completed,
+                    planned: planned,
+                    contributingToImplementation: implementation,
+                    contributingToTesting: testing,
+                    notes: notes,
+                    createdBy: auth.currentUser.uid,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                closeModal('addProgressModal');
+                loadProgress();
+                loadDashboard();
+            } catch (error) {
+                alert('Error adding progress: ' + error.message);
+            }
+        }
+
+        // Load functions
+        async function loadDashboard() {
+            try {
+                const classesSnapshot = await db.collection('classes').where('createdBy', '==', auth.currentUser.uid).get();
+                const groupsSnapshot = await db.collection('groups').where('createdBy', '==', auth.currentUser.uid).get();
+                const studentsSnapshot = await db.collection('students').where('createdBy', '==', auth.currentUser.uid).get();
+                
+                document.getElementById('totalClasses').textContent = classesSnapshot.size;
+                document.getElementById('totalGroups').textContent = groupsSnapshot.size;
+                document.getElementById('totalStudents').textContent = studentsSnapshot.size;
+
+                // Load recent progress
+                const progressSnapshot = await db.collection('progress')
+                    .where('createdBy', '==', auth.currentUser.uid)
+                    .orderBy('createdAt', 'desc')
+                    .limit(5)
+                    .get();
+
+                const recentProgressList = document.getElementById('recentProgressList');
+                recentProgressList.innerHTML = '';
+
+                for (const doc of progressSnapshot.docs) {
+                    const progress = doc.data();
+                    const studentDoc = await db.collection('students').doc(progress.studentId).get();
+                    const student = studentDoc.data();
+                    
+                    const progressDiv = document.createElement('div');
+                    progressDiv.className = 'bg-gray-50 p-3 rounded';
+                    progressDiv.innerHTML = `
+                        <p class="font-semibold">${student ? student.name : 'Unknown Student'} - Week ${progress.week}</p>
+                        <p class="text-sm text-gray-600">Completed: ${progress.completed.substring(0, 100)}...</p>
+                    `;
+                    recentProgressList.appendChild(progressDiv);
+                }
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+            }
+        }
+
+        async function loadClasses() {
+            try {
+                const snapshot = await db.collection('classes').where('createdBy', '==', auth.currentUser.uid).get();
+                const classesList = document.getElementById('classesList');
+                classesList.innerHTML = '';
+
+                snapshot.forEach(doc => {
+                    const classData = doc.data();
+                    const classDiv = document.createElement('div');
+                    classDiv.className = 'bg-gray-50 p-4 rounded flex justify-between items-center';
+                    classDiv.innerHTML = `
+                        <span class="font-semibold">${classData.name}</span>
+                        <button onclick="deleteClass('${doc.id}')" class="text-red-600 hover:text-red-800">Delete</button>
+                    `;
+                    classesList.appendChild(classDiv);
+                });
+            } catch (error) {
+                console.error('Error loading classes:', error);
+            }
+        }
+
+        async function loadGroups() {
+            try {
+                const snapshot = await db.collection('groups').where('createdBy', '==', auth.currentUser.uid).get();
+                const groupsList = document.getElementById('groupsList');
+                groupsList.innerHTML = '';
+
+                for (const doc of snapshot.docs) {
+                    const groupData = doc.data();
+                    const classDoc = await db.collection('classes').doc(groupData.classId).get();
+                    const className = classDoc.exists ? classDoc.data().name : 'Unknown Class';
+                    
+                    const groupDiv = document.createElement('div');
+                    groupDiv.className = 'bg-gray-50 p-4 rounded flex justify-between items-center';
+                    groupDiv.innerHTML = `
+                        <div>
+                            <span class="font-semibold">${groupData.name}</span>
+                            <span class="text-sm text-gray-600 ml-2">(${className})</span>
+                        </div>
+                        <button onclick="deleteGroup('${doc.id}')" class="text-red-600 hover:text-red-800">Delete</button>
+                    `;
+                    groupsList.appendChild(groupDiv);
+                }
+
+                // Update filter dropdown
+                const filterGroup = document.getElementById('filterGroup');
+                filterGroup.innerHTML = '<option value="">All Groups</option>';
+                snapshot.forEach(doc => {
+                    const option = document.createElement('option');
+                    option.value = doc.id;
+                    option.textContent = doc.data().name;
+                    filterGroup.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading groups:', error);
+            }
+        }
+
+        async function loadStudents() {
+            try {
+                const snapshot = await db.collection('students').where('createdBy', '==', auth.currentUser.uid).get();
+                const studentsList = document.getElementById('studentsList');
+                studentsList.innerHTML = '';
+
+                for (const doc of snapshot.docs) {
+                    const studentData = doc.data();
+                    const groupDoc = await db.collection('groups').doc(studentData.groupId).get();
+                    const groupName = groupDoc.exists ? groupDoc.data().name : 'Unknown Group';
+                    
+                    const studentDiv = document.createElement('div');
+                    studentDiv.className = 'bg-gray-50 p-4 rounded flex justify-between items-center';
+                    studentDiv.innerHTML = `
+                        <div>
+                            <span class="font-semibold">${studentData.name}</span>
+                            <span class="text-sm text-gray-600 ml-2">${studentData.email}</span>
+                            <span class="text-sm text-gray-600 ml-2">(${groupName})</span>
+                        </div>
+                        <button onclick="deleteStudent('${doc.id}')" class="text-red-600 hover:text-red-800">Delete</button>
+                    `;
+                    studentsList.appendChild(studentDiv);
+                }
+
+                // Update filter dropdown
+                const filterStudent = document.getElementById('filterStudent');
+                filterStudent.innerHTML = '<option value="">All Students</option>';
+                snapshot.forEach(doc => {
+                    const option = document.createElement('option');
+                    option.value = doc.id;
+                    option.textContent = doc.data().name;
+                    filterStudent.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading students:', error);
+            }
+        }
+
+        async function loadProgress() {
+            try {
+                let query = db.collection('progress').where('createdBy', '==', auth.currentUser.uid);
+                
+                const filterGroupValue = document.getElementById('filterGroup').value;
+                const filterWeekValue = document.getElementById('filterWeek').value;
+                const filterStudentValue = document.getElementById('filterStudent').value;
+
+                if (filterStudentValue) {
+                    query = query.where('studentId', '==', filterStudentValue);
+                }
+                if (filterWeekValue) {
+                    query = query.where('week', '==', parseInt(filterWeekValue));
+                }
+
+                const snapshot = await query.orderBy('createdAt', 'desc').get();
+                const progressList = document.getElementById('progressList');
+                progressList.innerHTML = '';
+
+                const studentsMap = {};
+                const groupsMap = {};
+
+                // Load all students first
+                const studentsSnapshot = await db.collection('students').where('createdBy', '==', auth.currentUser.uid).get();
+                studentsSnapshot.forEach(doc => {
+                    studentsMap[doc.id] = doc.data();
+                });
+
+                // Load all groups
+                const groupsSnapshot = await db.collection('groups').where('createdBy', '==', auth.currentUser.uid).get();
+                groupsSnapshot.forEach(doc => {
+                    groupsMap[doc.id] = doc.data();
+                });
+
+                // Filter by group if selected
+                let filteredDocs = snapshot.docs;
+                if (filterGroupValue) {
+                    filteredDocs = snapshot.docs.filter(doc => {
+                        const studentId = doc.data().studentId;
+                        const student = studentsMap[studentId];
+                        return student && student.groupId === filterGroupValue;
+                    });
+                }
+
+                filteredDocs.forEach(doc => {
+                    const progress = doc.data();
+                    const student = studentsMap[progress.studentId];
+                    const group = student ? groupsMap[student.groupId] : null;
+                    
+                    const progressDiv = document.createElement('div');
+                    progressDiv.className = 'bg-gray-50 p-4 rounded';
+                    progressDiv.innerHTML = `
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <h4 class="font-bold">${student ? student.name : 'Unknown Student'}</h4>
+                                <p class="text-sm text-gray-600">${group ? group.name : 'Unknown Group'} - Week ${progress.week}</p>
+                            </div>
+                            <button onclick="deleteProgress('${doc.id}')" class="text-red-600 hover:text-red-800 text-sm">Delete</button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                            <div>
+                                <p class="font-semibold text-sm">Completed this week:</p>
+                                <p class="text-sm">${progress.completed}</p>
+                            </div>
+                            <div>
+                                <p class="font-semibold text-sm">Planned for next week:</p>
+                                <p class="text-sm">${progress.planned}</p>
+                            </div>
+                        </div>
+                        <div class="mt-3 flex gap-4">
+                            <span class="text-sm ${progress.contributingToImplementation ? 'text-green-600' : 'text-gray-400'}">
+                                ${progress.contributingToImplementation ? '✓' : '✗'} Implementation
+                            </span>
+                            <span class="text-sm ${progress.contributingToTesting ? 'text-green-600' : 'text-gray-400'}">
+                                ${progress.contributingToTesting ? '✓' : '✗'} Testing
+                            </span>
+                        </div>
+                        ${progress.notes ? `<p class="text-sm text-gray-600 mt-2"><strong>Notes:</strong> ${progress.notes}</p>` : ''}
+                    `;
+                    progressList.appendChild(progressDiv);
+                });
+            } catch (error) {
+                console.error('Error loading progress:', error);
+            }
+        }
+
+        // Helper functions
+        async function loadClassesForSelect() {
+            const snapshot = await db.collection('classes').where('createdBy', '==', auth.currentUser.uid).get();
+            const select = document.getElementById('groupClass');
+            select.innerHTML = '<option value="">Select Class</option>';
+            snapshot.forEach(doc => {
+                const option = document.createElement('option');
+                option.value = doc.id;
+                option.textContent = doc.data().name;
+                select.appendChild(option);
+            });
+        }
+
+        async function loadGroupsForSelect() {
+            const snapshot = await db.collection('groups').where('createdBy', '==', auth.currentUser.uid).get();
+            const select = document.getElementById('studentGroup');
+            select.innerHTML = '<option value="">Select Group</option>';
+            snapshot.forEach(doc => {
+                const option = document.createElement('option');
+                option.value = doc.id;
+                option.textContent = doc.data().name;
+                select.appendChild(option);
+            });
+        }
+
+        async function loadStudentsForSelect() {
+            const snapshot = await db.collection('students').where('createdBy', '==', auth.currentUser.uid).get();
+            const select = document.getElementById('progressStudent');
+            select.innerHTML = '<option value="">Select Student</option>';
+            snapshot.forEach(doc => {
+                const option = document.createElement('option');
+                option.value = doc.id;
+                option.textContent = doc.data().name;
+                select.appendChild(option);
+            });
+        }
+
+        function populateWeekSelect() {
+            const select = document.getElementById('progressWeek');
+            select.innerHTML = '<option value="">Select Week</option>';
+            for (let i = 1; i <= 12; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = `Week ${i}`;
+                select.appendChild(option);
+            }
+
+            // Also populate filter week dropdown
+            const filterWeek = document.getElementById('filterWeek');
+            filterWeek.innerHTML = '<option value="">All Weeks</option>';
+            for (let i = 1; i <= 12; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = `Week ${i}`;
+                filterWeek.appendChild(option);
+            }
+        }
+
+        // Delete functions
+        async function deleteClass(id) {
+            if (confirm('Are you sure you want to delete this class?')) {
+                try {
+                    await db.collection('classes').doc(id).delete();
+                    loadClasses();
+                    loadDashboard();
+                } catch (error) {
+                    alert('Error deleting class: ' + error.message);
+                }
+            }
+        }
+
+        async function deleteGroup(id) {
+            if (confirm('Are you sure you want to delete this group?')) {
+                try {
+                    await db.collection('groups').doc(id).delete();
+                    loadGroups();
+                    loadDashboard();
+                } catch (error) {
+                    alert('Error deleting group: ' + error.message);
+                }
+            }
+        }
+
+        async function deleteStudent(id) {
+            if (confirm('Are you sure you want to delete this student?')) {
+                try {
+                    await db.collection('students').doc(id).delete();
+                    loadStudents();
+                    loadDashboard();
+                } catch (error) {
+                    alert('Error deleting student: ' + error.message);
+                }
+            }
+        }
+
+        async function deleteProgress(id) {
+            if (confirm('Are you sure you want to delete this progress entry?')) {
+                try {
+                    await db.collection('progress').doc(id).delete();
+                    loadProgress();
+                    loadDashboard();
+                } catch (error) {
+                    alert('Error deleting progress: ' + error.message);
+                }
+            }
+        }
+
+        // Initialize week filter on page load
+        window.onload = function() {
+            populateWeekSelect();
+        };
+    </script>
+</body>
+</html>
